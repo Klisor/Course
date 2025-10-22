@@ -1,7 +1,12 @@
 springdoc:
-  api-docs:
-    enabled: true
-    path: /v3/api-docs
   swagger-ui:
-    path: /swagger-ui.html
-    display-request-duration: true
+    disable-swagger-default-url: true
+    display-operation-id: false
+    # 关键：把顶部栏重新放出来
+    show-common-extensions: true
+    show-extensions: true
+    supported-submit-methods: "*"   # 允许 Try it out
+    # 如果想始终显示 Download 按钮，再补一条（knife4j 不用补）
+    urls:
+      - url: /v3/api-docs
+        name: api
