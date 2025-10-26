@@ -36,7 +36,7 @@ public class EnrollmentService {
     }
 
     public Enrollment enroll(Enrollment enrollment) {
-        studentRepo.findById(enrollment.getStudentId())
+        studentRepo.findByStudentId(enrollment.getStudentId())
                 .orElseThrow(() -> new RuntimeException("学生不存在"));
 
         var course = courseRepo.findById(enrollment.getCourseId())
