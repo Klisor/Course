@@ -1,12 +1,24 @@
+# 主配置文件 - 设置默认环境和通用配置
+spring:
+  profiles:
+    active: prod  # 默认使用生产环境
+  application:
+    name: Course
+
+# 通用配置（所有环境共享）
 springdoc:
   swagger-ui:
     disable-swagger-default-url: true
     display-operation-id: false
-    # 关键：把顶部栏重新放出来
     show-common-extensions: true
     show-extensions: true
-    supported-submit-methods: "*"   # 允许 Try it out
-    # 如果想始终显示 Download 按钮，再补一条（knife4j 不用补）
+    supported-submit-methods: "*"
     urls:
       - url: /v3/api-docs
         name: api
+
+# 通用日志配置
+logging:
+  level:
+    root: INFO
+    com.zjsu: INFO

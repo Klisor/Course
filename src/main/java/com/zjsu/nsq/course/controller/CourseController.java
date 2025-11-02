@@ -37,9 +37,35 @@ public class CourseController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> get(@PathVariable String id) {
+    public ResponseEntity<Map<String, Object>> get(@PathVariable Long id) {
         try {
             Course course = service.findById(id)
+                    .orElseThrow(() -> new RuntimeException("课程不存在"));
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 200);
+            response.put("message", "Success");
+            response.put("data", course);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 404);
+            response.put("message", e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(404).body(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 500);
+            response.put("message", "Internal server error: " + e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    @GetMapping("/code/{code}")
+    public ResponseEntity<Map<String, Object>> getByCode(@PathVariable String code) {
+        try {
+            Course course = service.findByCode(code)
                     .orElseThrow(() -> new RuntimeException("课程不存在"));
 
             Map<String, Object> response = new HashMap<>();
@@ -88,13 +114,12 @@ public class CourseController {
             response.put("message", "课程创建成功");
             response.put("data", createdCourse);
             return ResponseEntity.status(201).body(response);
-        } catch (RuntimeException e) {
-            // 处理业务逻辑异常
+        } catch (CourseService.CourseAlreadyExistsException e) {
             Map<String, Object> response = new HashMap<>();
-            response.put("code", 400);
+            response.put("code", 409);
             response.put("message", e.getMessage());
             response.put("data", null);
-            return ResponseEntity.status(400).body(response);
+            return ResponseEntity.status(409).body(response);
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
             response.put("code", 500);
@@ -105,7 +130,7 @@ public class CourseController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> update(@PathVariable String id, @RequestBody Course course) {
+    public ResponseEntity<Map<String, Object>> update(@PathVariable Long id, @RequestBody Course course) {
         try {
             Course updatedCourse = service.update(id, course);
             Map<String, Object> response = new HashMap<>();
@@ -113,7 +138,37 @@ public class CourseController {
             response.put("message", "课程更新成功");
             response.put("data", updatedCourse);
             return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
+        } catch (CourseService.CourseNotFoundException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 404);
+            response.put("message", e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(404).body(response);
+        } catch (CourseService.CourseAlreadyExistsException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 409);
+            response.put("message", e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(409).body(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 500);
+            response.put("message", "Internal server error: " + e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> delete(@PathVariable Long id) {
+        try {
+            service.delete(id);
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 200);
+            response.put("message", "删除成功");
+            response.put("data", null);
+            return ResponseEntity.ok(response);
+        } catch (CourseService.CourseNotFoundException e) {
             Map<String, Object> response = new HashMap<>();
             response.put("code", 404);
             response.put("message", e.getMessage());
@@ -128,21 +183,51 @@ public class CourseController {
         }
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> delete(@PathVariable String id) {
+    @GetMapping("/search/title/{title}")
+    public ResponseEntity<Map<String, Object>> findByTitle(@PathVariable String title) {
         try {
-            service.delete(id);
+            List<Course> courses = service.findByTitleContaining(title);
             Map<String, Object> response = new HashMap<>();
             response.put("code", 200);
-            response.put("message", "删除成功");
-            response.put("data", null);
+            response.put("message", "Success");
+            response.put("data", courses);
             return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
-            response.put("code", 404);
-            response.put("message", e.getMessage());
+            response.put("code", 500);
+            response.put("message", "Internal server error: " + e.getMessage());
             response.put("data", null);
-            return ResponseEntity.status(404).body(response);
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    @GetMapping("/search/instructor/{instructorName}")
+    public ResponseEntity<Map<String, Object>> findByInstructor(@PathVariable String instructorName) {
+        try {
+            List<Course> courses = service.findByInstructorName(instructorName);
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 200);
+            response.put("message", "Success");
+            response.put("data", courses);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 500);
+            response.put("message", "Internal server error: " + e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    @GetMapping("/available")
+    public ResponseEntity<Map<String, Object>> findAvailableCourses() {
+        try {
+            List<Course> courses = service.findAvailableCourses();
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 200);
+            response.put("message", "Success");
+            response.put("data", courses);
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
             response.put("code", 500);

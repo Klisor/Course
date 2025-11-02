@@ -37,9 +37,9 @@ public class EnrollmentController {
     }
 
     @GetMapping("/course/{courseId}")
-    public ResponseEntity<Map<String, Object>> byCourse(@PathVariable String courseId) {
+    public ResponseEntity<Map<String, Object>> byCourse(@PathVariable Long courseId) {
         try {
-            List<Enrollment> enrollments = service.findByCourseId(courseId);
+            List<Enrollment> enrollments = service.findByCourse(courseId);
             Map<String, Object> response = new HashMap<>();
             response.put("code", 200);
             response.put("message", "Success");
@@ -55,9 +55,9 @@ public class EnrollmentController {
     }
 
     @GetMapping("/student/{studentId}")
-    public ResponseEntity<Map<String, Object>> byStudent(@PathVariable String studentId) {
+    public ResponseEntity<Map<String, Object>> byStudent(@PathVariable Long studentId) {
         try {
-            List<Enrollment> enrollments = service.findByStudentId(studentId);
+            List<Enrollment> enrollments = service.findByStudent(studentId);
             Map<String, Object> response = new HashMap<>();
             response.put("code", 200);
             response.put("message", "Success");
@@ -72,19 +72,34 @@ public class EnrollmentController {
         }
     }
 
-    @PostMapping
-    public ResponseEntity<Map<String, Object>> enroll(@RequestBody Enrollment enrollment) {
+    @GetMapping("/status/{status}")
+    public ResponseEntity<Map<String, Object>> byStatus(@PathVariable String status) {
         try {
-            // 验证请求参数
-            if (enrollment.getStudentId() == null || enrollment.getStudentId().trim().isEmpty()) {
-                Map<String, Object> response = new HashMap<>();
-                response.put("code", 400);
-                response.put("message", "studentId 不能为空");
-                response.put("data", null);
-                return ResponseEntity.status(400).body(response);
-            }
+            List<Enrollment> enrollments = service.findByStatus(
+                    com.zjsu.nsq.course.model.EnrollmentStatus.valueOf(status.toUpperCase())
+            );
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 200);
+            response.put("message", "Success");
+            response.put("data", enrollments);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 400);
+            response.put("message", "Invalid status: " + e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(400).body(response);
+        }
+    }
 
-            if (enrollment.getCourseId() == null || enrollment.getCourseId().trim().isEmpty()) {
+    @PostMapping
+    public ResponseEntity<Map<String, Object>> enroll(@RequestBody Map<String, Long> request) {
+        try {
+            Long courseId = request.get("courseId");
+            Long studentId = request.get("studentId");
+
+            // 验证请求参数
+            if (courseId == null) {
                 Map<String, Object> response = new HashMap<>();
                 response.put("code", 400);
                 response.put("message", "courseId 不能为空");
@@ -92,32 +107,149 @@ public class EnrollmentController {
                 return ResponseEntity.status(400).body(response);
             }
 
-            Enrollment result = service.enroll(enrollment);
+            if (studentId == null) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("code", 400);
+                response.put("message", "studentId 不能为空");
+                response.put("data", null);
+                return ResponseEntity.status(400).body(response);
+            }
+
+            Enrollment result = service.enroll(courseId, studentId);
             Map<String, Object> response = new HashMap<>();
             response.put("code", 201);
             response.put("message", "选课成功");
             response.put("data", result);
             return ResponseEntity.status(201).body(response);
-        } catch (RuntimeException e) {
-            // 根据异常消息确定具体的错误类型和状态码
+        } catch (com.zjsu.nsq.course.service.EnrollmentService.DuplicateEnrollmentException e) {
             Map<String, Object> response = new HashMap<>();
-            String errorMessage = e.getMessage();
-            int errorCode;
+            response.put("code", 409);
+            response.put("message", e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(409).body(response);
+        } catch (com.zjsu.nsq.course.service.EnrollmentService.CourseFullException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 409);
+            response.put("message", e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(409).body(response);
+        } catch (com.zjsu.nsq.course.service.CourseService.CourseNotFoundException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 404);
+            response.put("message", e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(404).body(response);
+        } catch (com.zjsu.nsq.course.service.StudentService.StudentNotFoundException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 404);
+            response.put("message", e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(404).body(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 500);
+            response.put("message", "Internal server error: " + e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(500).body(response);
+        }
+    }
 
-            if (errorMessage.contains("学生不存在") || errorMessage.contains("课程不存在")) {
-                errorCode = 404; // 资源不存在
-            } else if (errorMessage.contains("重复选课") || errorMessage.contains("课程已满")) {
-                errorCode = 409; // 冲突
-            } else if (errorMessage.contains("不能为空")) {
-                errorCode = 400; // 请求参数错误
-            } else {
-                errorCode = 400; // 其他业务错误
+    // 新增：基于学生和课程ID的退课端点
+    @PostMapping("/drop")
+    public ResponseEntity<Map<String, Object>> dropByStudentAndCourse(@RequestBody Map<String, Long> request) {
+        try {
+            Long courseId = request.get("courseId");
+            Long studentId = request.get("studentId");
+
+            // 验证请求参数
+            if (courseId == null) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("code", 400);
+                response.put("message", "courseId 不能为空");
+                response.put("data", null);
+                return ResponseEntity.status(400).body(response);
             }
 
-            response.put("code", errorCode);
-            response.put("message", errorMessage);
+            if (studentId == null) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("code", 400);
+                response.put("message", "studentId 不能为空");
+                response.put("data", null);
+                return ResponseEntity.status(400).body(response);
+            }
+
+            Enrollment result = service.dropByStudentAndCourse(studentId, courseId);
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 200);
+            response.put("message", "退课成功");
+            response.put("data", result);
+            return ResponseEntity.ok(response);
+        } catch (com.zjsu.nsq.course.service.EnrollmentService.EnrollmentNotFoundException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 404);
+            response.put("message", e.getMessage());
             response.put("data", null);
-            return ResponseEntity.status(errorCode).body(response);
+            return ResponseEntity.status(404).body(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 500);
+            response.put("message", "Internal server error: " + e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    @PostMapping("/{enrollmentId}/drop")
+    public ResponseEntity<Map<String, Object>> drop(@PathVariable Long enrollmentId) {
+        try {
+            Enrollment result = service.drop(enrollmentId);
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 200);
+            response.put("message", "退课成功");
+            response.put("data", result);
+            return ResponseEntity.ok(response);
+        } catch (com.zjsu.nsq.course.service.EnrollmentService.EnrollmentNotFoundException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 404);
+            response.put("message", e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(404).body(response);
+        } catch (com.zjsu.nsq.course.service.EnrollmentService.InvalidEnrollmentOperationException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 400);
+            response.put("message", e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(400).body(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 500);
+            response.put("message", "Internal server error: " + e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    @PostMapping("/{enrollmentId}/complete")
+    public ResponseEntity<Map<String, Object>> complete(@PathVariable Long enrollmentId) {
+        try {
+            Enrollment result = service.complete(enrollmentId);
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 200);
+            response.put("message", "课程完成");
+            response.put("data", result);
+            return ResponseEntity.ok(response);
+        } catch (com.zjsu.nsq.course.service.EnrollmentService.EnrollmentNotFoundException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 404);
+            response.put("message", e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(404).body(response);
+        } catch (com.zjsu.nsq.course.service.EnrollmentService.InvalidEnrollmentOperationException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 400);
+            response.put("message", e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(400).body(response);
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
             response.put("code", 500);
@@ -128,7 +260,7 @@ public class EnrollmentController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> cancel(@PathVariable String id) {
+    public ResponseEntity<Map<String, Object>> cancel(@PathVariable Long id) {
         try {
             service.delete(id);
             Map<String, Object> response = new HashMap<>();
@@ -136,7 +268,55 @@ public class EnrollmentController {
             response.put("message", "取消选课成功");
             response.put("data", null);
             return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
+        } catch (com.zjsu.nsq.course.service.EnrollmentService.EnrollmentNotFoundException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 404);
+            response.put("message", e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(404).body(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 500);
+            response.put("message", "Internal server error: " + e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    @GetMapping("/stats/course/{courseId}")
+    public ResponseEntity<Map<String, Object>> courseStats(@PathVariable Long courseId) {
+        try {
+            Long activeCount = service.countActiveEnrollmentsByCourse(courseId);
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 200);
+            response.put("message", "Success");
+            response.put("data", Map.of("activeEnrollments", activeCount));
+            return ResponseEntity.ok(response);
+        } catch (com.zjsu.nsq.course.service.CourseService.CourseNotFoundException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 404);
+            response.put("message", e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(404).body(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 500);
+            response.put("message", "Internal server error: " + e.getMessage());
+            response.put("data", null);
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    @GetMapping("/stats/student/{studentId}")
+    public ResponseEntity<Map<String, Object>> studentStats(@PathVariable Long studentId) {
+        try {
+            Long activeCount = service.countActiveEnrollmentsByStudent(studentId);
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 200);
+            response.put("message", "Success");
+            response.put("data", Map.of("activeEnrollments", activeCount));
+            return ResponseEntity.ok(response);
+        } catch (com.zjsu.nsq.course.service.StudentService.StudentNotFoundException e) {
             Map<String, Object> response = new HashMap<>();
             response.put("code", 404);
             response.put("message", e.getMessage());

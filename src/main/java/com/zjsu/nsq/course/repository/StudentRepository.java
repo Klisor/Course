@@ -1,35 +1,46 @@
 package com.zjsu.nsq.course.repository;
 
 import com.zjsu.nsq.course.model.Student;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.List;
+import java.util.Optional;
 
 @Repository
-public class StudentRepository {
-    private final Map<String, Student> map = new ConcurrentHashMap<>();
+public interface StudentRepository extends JpaRepository<Student, Long> {
 
-    public List<Student> findAll() {
-        return new ArrayList<>(map.values());
-    }
+    // 按学号唯一查询
+    Optional<Student> findByStudentId(String studentId);
 
-    public Optional<Student> findById(String id) {
-        return Optional.ofNullable(map.get(id));
-    }
+    // 按邮箱唯一查询
+    Optional<Student> findByEmail(String email);
 
-    public Optional<Student> findByStudentId(String studentId) {
-        return map.values().stream()
-                .filter(s -> studentId.equals(s.getStudentId()))
-                .findFirst();
-    }
+    // 判重检查 - 学号
+    boolean existsByStudentId(String studentId);
 
-    public Student save(Student student) {
-        map.put(student.getId(), student);
-        return student;
-    }
+    // 判重检查 - 邮箱
+    boolean existsByEmail(String email);
 
-    public void deleteById(String id) {
-        map.remove(id);
-    }
+    // 按专业筛选
+    List<Student> findByMajor(String major);
+
+    // 按年级筛选
+    List<Student> findByGrade(Integer grade);
+
+    // 按专业和年级组合筛选
+    List<Student> findByMajorAndGrade(String major, Integer grade);
+
+    // 按姓名模糊查询
+    List<Student> findByNameContainingIgnoreCase(String name);
+
+    // 统计专业人数
+    @Query("SELECT COUNT(s) FROM Student s WHERE s.major = :major")
+    Long countByMajor(@Param("major") String major);
+
+    // 统计年级人数
+    @Query("SELECT COUNT(s) FROM Student s WHERE s.grade = :grade")
+    Long countByGrade(@Param("grade") Integer grade);
 }
