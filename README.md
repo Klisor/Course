@@ -245,7 +245,277 @@ src/main/java/com/zjsu/nsq/course/
 ## 注意事项
 
 1. **数据持久化**: 当前使用内存存储，重启应用后所有数据将丢失
+
 2. **并发处理**: 系统使用ConcurrentHashMap支持基本并发访问
+
 3. **错误处理**: 统一的错误响应格式和HTTP状态码
+
 4. **API文档**: 所有API遵循RESTful设计原则
 
+   
+
+## Docker 部署
+
+### 环境要求
+- Docker 20.10+
+- Docker Compose 2.0+
+- 至少 2GB 可用内存
+
+### 一键部署
+```bash
+# 克隆项目
+git clone <项目地址>
+cd course
+
+# 构建并启动所有服务
+docker-compose up -d --build
+
+# 查看服务状态
+docker-compose ps
+```
+
+## 详细部署步骤
+
+### 1. 构建镜像
+```bash
+# 构建应用镜像
+docker build -t course-app:latest .
+
+# 或者使用 Docker Compose 构建
+docker-compose build
+```
+
+### 2. 启动服务
+```bash
+# 启动所有服务（后台运行）
+docker-compose up -d
+
+# 启动特定服务
+docker-compose up -d app
+docker-compose up -d mysql
+
+# 查看运行状态
+docker-compose ps
+```
+
+### 3. 服务验证
+```bash
+# 检查应用健康状态
+curl http://localhost:8080/actuator/health
+
+# 测试课程API
+curl http://localhost:8080/api/courses
+
+# 测试学生API  
+curl http://localhost:8080/api/students
+```
+
+## 服务配置
+
+### 服务架构
+```
+coursehub-app (Spring Boot) :8080
+          ↓
+coursehub-mysql (MySQL) :3306
+```
+
+### 端口映射
+- **应用服务**: 8080 → 8080
+- **数据库服务**: 3306 → 3306
+
+### 环境变量
+```yaml
+# 应用环境变量
+SPRING_PROFILES_ACTIVE: docker
+SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/course_db
+SPRING_DATASOURCE_USERNAME: Klisor
+SPRING_DATASOURCE_PASSWORD: 123456
+
+# 数据库环境变量
+MYSQL_ROOT_PASSWORD: 123456
+MYSQL_DATABASE: course_db
+MYSQL_USER: Klisor
+MYSQL_PASSWORD: 123456
+```
+
+## 运维管理
+
+### 查看日志
+```bash
+# 查看所有服务日志
+docker-compose logs
+
+# 查看特定服务日志
+docker-compose logs app
+docker-compose logs mysql
+
+# 实时查看日志
+docker-compose logs -f app
+
+# 查看最近日志
+docker-compose logs --tail=100 app
+```
+
+### 服务管理
+```bash
+# 停止服务
+docker-compose down
+
+# 重启服务
+docker-compose restart
+
+# 重启特定服务
+docker-compose restart app
+
+# 查看服务状态
+docker-compose ps
+
+# 查看资源使用
+docker-compose top
+```
+
+### 数据管理
+```bash
+# 备份数据库
+docker exec coursehub-mysql mysqldump -u root -p123456 course_db > backup.sql
+
+# 恢复数据库
+docker exec -i coursehub-mysql mysql -u root -p123456 course_db < backup.sql
+
+# 进入数据库控制台
+docker exec -it coursehub-mysql mysql -u Klisor -p123456 course_db
+```
+
+## 故障排查
+
+### 常见问题解决
+
+**1. 端口冲突**
+```bash
+# 检查端口占用
+netstat -an | grep 8080
+netstat -an | grep 3306
+
+# 修改 docker-compose.yml 中的端口映射
+ports:
+  - "8081:8080"  # 主机端口:容器端口
+```
+
+**2. 容器启动失败**
+```bash
+# 查看详细日志
+docker-compose logs --tail=50 app
+
+# 检查容器状态
+docker-compose ps -a
+
+# 重新构建镜像
+docker-compose build --no-cache app
+```
+
+**3. 数据库连接问题**
+```bash
+# 测试数据库连接
+docker exec coursehub-mysql mysql -u Klisor -p123456 -e "SHOW DATABASES;"
+
+# 检查网络连通性
+docker exec coursehub-app ping mysql
+docker exec coursehub-app nc -z mysql 3306
+```
+
+**4. 内存不足**
+```bash
+# 查看系统资源
+docker system df
+docker stats
+
+# 清理无用资源
+docker system prune
+```
+
+### 性能监控
+```bash
+# 查看容器资源使用
+docker stats
+
+# 查看镜像大小
+docker images course-app
+
+# 分析镜像层次
+docker history course-app:latest
+```
+
+## 开发调试
+
+### 开发模式
+```bash
+# 使用开发配置启动
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+# 查看实时日志
+docker-compose logs -f app
+```
+
+### 进入容器调试
+```bash
+# 进入应用容器
+docker exec -it coursehub-app sh
+
+# 进入数据库容器
+docker exec -it coursehub-mysql bash
+
+# 在容器内执行命令
+docker exec coursehub-app java -version
+```
+
+## 生产部署建议
+
+### 安全配置
+```yaml
+# 使用强密码
+environment:
+  - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+  - MYSQL_PASSWORD=${DB_PASSWORD}
+
+# 限制资源
+deploy:
+  resources:
+    limits:
+      memory: 512M
+      cpus: '1.0'
+```
+
+### 备份策略
+```bash
+# 定时备份脚本
+#!/bin/bash
+docker exec coursehub-mysql mysqldump -u root -p$DB_PASSWORD course_db > /backups/backup_$(date +%Y%m%d_%H%M%S).sql
+```
+
+## 扩展配置
+
+### 自定义配置
+创建 `.env` 文件覆盖默认配置：
+```env
+DB_PASSWORD=your_secure_password
+APP_PORT=8080
+```
+
+### 网络配置
+```bash
+# 查看网络详情
+docker network inspect course_coursehub-network
+
+# 创建自定义网络
+docker network create course-network
+```
+
+---
+
+## 技术支持
+
+遇到问题时请按以下步骤排查：
+1. 查看服务日志：`docker-compose logs`
+2. 检查容器状态：`docker-compose ps`  
+3. 验证网络连通性：`docker exec coursehub-app nc -z mysql 3306`
+4. 检查资源使用：`docker stats`
